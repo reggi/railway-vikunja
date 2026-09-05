@@ -5,11 +5,11 @@ Reproducible Railway infrastructure for a personal or independently deployed
 
 ## Architecture
 
-| Resource | Configuration |
-| --- | --- |
-| `vikunja` | Official `ghcr.io/go-vikunja/vikunja:2.6.0` image, one replica, port `3456` |
-| `postgres` | Railway-managed PostgreSQL used over the private network |
-| `files` | Railway S3-compatible bucket in the US East (`iad`) region |
+| Resource   | Configuration                                                                    |
+| ---------- | -------------------------------------------------------------------------------- |
+| `vikunja`  | Official image pinned in `.railway/docker-images.json`, one replica, port `3456` |
+| `postgres` | Railway-managed PostgreSQL used over the private network                         |
+| `files`    | Railway S3-compatible bucket in the US East (`iad`) region                       |
 
 The deployment uses Vikunja's `/api/v1/info` endpoint as its health check.
 Application sleeping is intentionally disabled because Vikunja performs
@@ -17,25 +17,25 @@ background work such as reminders.
 
 ## Environment variables
 
-| Name | Service | Required | Secret | Source | Purpose | Example |
-| --- | --- | --- | --- | --- | --- | --- |
-| `PORT` | `vikunja` | Yes | No | Literal | Railway HTTP target port | `3456` |
-| `VIKUNJA_SERVICE_INTERFACE` | `vikunja` | Yes | No | Literal | Address and port Vikunja listens on | `:3456` |
-| `VIKUNJA_SERVICE_PUBLICURL` | `vikunja` | Yes | No | Railway runtime reference | Public URL used by the API and frontend | `https://${{RAILWAY_PUBLIC_DOMAIN}}` |
-| `VIKUNJA_SERVICE_SECRET` | `vikunja` | Yes | Yes | User-provided, retained with `preserve()` | Signs tokens and other cryptographic data | Generate with `openssl rand -hex 32` |
-| `VIKUNJA_DATABASE_TYPE` | `vikunja` | Yes | No | Literal | Selects PostgreSQL | `postgres` |
-| `VIKUNJA_DATABASE_HOST` | `vikunja` | Yes | No | PostgreSQL resource reference | Private database host and port | Railway-managed |
-| `VIKUNJA_DATABASE_USER` | `vikunja` | Yes | No | PostgreSQL resource reference | Database user | Railway-managed |
-| `VIKUNJA_DATABASE_PASSWORD` | `vikunja` | Yes | Yes | PostgreSQL resource reference | Database password | Railway-managed |
-| `VIKUNJA_DATABASE_DATABASE` | `vikunja` | Yes | No | PostgreSQL resource reference | Database name | Railway-managed |
-| `VIKUNJA_DATABASE_SSLMODE` | `vikunja` | Yes | No | Literal | Uses Railway's private network without TLS | `disable` |
-| `VIKUNJA_FILES_TYPE` | `vikunja` | Yes | No | Literal | Selects S3-compatible attachment storage | `s3` |
-| `VIKUNJA_FILES_S3_ENDPOINT` | `vikunja` | Yes | No | Bucket resource reference | S3 API endpoint | Railway-managed |
-| `VIKUNJA_FILES_S3_BUCKET` | `vikunja` | Yes | No | Bucket resource reference | Globally unique S3 bucket name | Railway-managed |
-| `VIKUNJA_FILES_S3_REGION` | `vikunja` | Yes | No | Bucket resource reference | S3 region | Railway-managed |
-| `VIKUNJA_FILES_S3_ACCESSKEY` | `vikunja` | Yes | Yes | Bucket resource reference | S3 access key ID | Railway-managed |
-| `VIKUNJA_FILES_S3_SECRETKEY` | `vikunja` | Yes | Yes | Bucket resource reference | S3 secret access key | Railway-managed |
-| `VIKUNJA_FILES_S3_USEPATHSTYLE` | `vikunja` | Yes | No | Literal | Uses Railway's virtual-hosted-style bucket URLs | `false` |
+| Name                            | Service   | Required | Secret | Source                                    | Purpose                                         | Example                              |
+| ------------------------------- | --------- | -------- | ------ | ----------------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| `PORT`                          | `vikunja` | Yes      | No     | Literal                                   | Railway HTTP target port                        | `3456`                               |
+| `VIKUNJA_SERVICE_INTERFACE`     | `vikunja` | Yes      | No     | Literal                                   | Address and port Vikunja listens on             | `:3456`                              |
+| `VIKUNJA_SERVICE_PUBLICURL`     | `vikunja` | Yes      | No     | Railway runtime reference                 | Public URL used by the API and frontend         | `https://${{RAILWAY_PUBLIC_DOMAIN}}` |
+| `VIKUNJA_SERVICE_SECRET`        | `vikunja` | Yes      | Yes    | User-provided, retained with `preserve()` | Signs tokens and other cryptographic data       | Generate with `openssl rand -hex 32` |
+| `VIKUNJA_DATABASE_TYPE`         | `vikunja` | Yes      | No     | Literal                                   | Selects PostgreSQL                              | `postgres`                           |
+| `VIKUNJA_DATABASE_HOST`         | `vikunja` | Yes      | No     | PostgreSQL resource reference             | Private database host and port                  | Railway-managed                      |
+| `VIKUNJA_DATABASE_USER`         | `vikunja` | Yes      | No     | PostgreSQL resource reference             | Database user                                   | Railway-managed                      |
+| `VIKUNJA_DATABASE_PASSWORD`     | `vikunja` | Yes      | Yes    | PostgreSQL resource reference             | Database password                               | Railway-managed                      |
+| `VIKUNJA_DATABASE_DATABASE`     | `vikunja` | Yes      | No     | PostgreSQL resource reference             | Database name                                   | Railway-managed                      |
+| `VIKUNJA_DATABASE_SSLMODE`      | `vikunja` | Yes      | No     | Literal                                   | Uses Railway's private network without TLS      | `disable`                            |
+| `VIKUNJA_FILES_TYPE`            | `vikunja` | Yes      | No     | Literal                                   | Selects S3-compatible attachment storage        | `s3`                                 |
+| `VIKUNJA_FILES_S3_ENDPOINT`     | `vikunja` | Yes      | No     | Bucket resource reference                 | S3 API endpoint                                 | Railway-managed                      |
+| `VIKUNJA_FILES_S3_BUCKET`       | `vikunja` | Yes      | No     | Bucket resource reference                 | Globally unique S3 bucket name                  | Railway-managed                      |
+| `VIKUNJA_FILES_S3_REGION`       | `vikunja` | Yes      | No     | Bucket resource reference                 | S3 region                                       | Railway-managed                      |
+| `VIKUNJA_FILES_S3_ACCESSKEY`    | `vikunja` | Yes      | Yes    | Bucket resource reference                 | S3 access key ID                                | Railway-managed                      |
+| `VIKUNJA_FILES_S3_SECRETKEY`    | `vikunja` | Yes      | Yes    | Bucket resource reference                 | S3 secret access key                            | Railway-managed                      |
+| `VIKUNJA_FILES_S3_USEPATHSTYLE` | `vikunja` | Yes      | No     | Literal                                   | Uses Railway's virtual-hosted-style bucket URLs | `false`                              |
 
 Additional Vikunja settings can be added to the `env` block using the
 documented `VIKUNJA_<SECTION>_<KEY>` naming convention.
@@ -102,9 +102,12 @@ instance.
 
 1. Read the Vikunja release notes and migration guidance.
 2. Back up PostgreSQL and the `files` bucket.
-3. Change the pinned image tag in `.railway/railway.ts`.
-4. Run `railway config plan` and review the exact changes.
-5. Apply only after approval, then wait for a successful health check.
+3. Use `CHECK_RAILWAY_DOCKER_IMAGE_UPDATES`, or the canonical
+   `@reggi/knitto` image command locally, to propose a patch or
+   minor change in `.railway/docker-images.json`.
+4. Review and merge the image update pull request deliberately.
+5. Run `railway config plan` and review the exact changes.
+6. Apply only after approval, then wait for a successful health check.
 
 Vikunja runs database migrations during startup. Do not roll back to an older
 image after a migration unless the release notes explicitly confirm that the

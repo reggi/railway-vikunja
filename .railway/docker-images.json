@@ -1,0 +1,9 @@
+{
+  "images": {
+    "vikunja": {
+      "repository": "ghcr.io/go-vikunja/vikunja",
+      "tag": "2.6.0",
+      "releaseUrl": "https://github.com/go-vikunja/vikunja/releases"
+    }
+  }
+}

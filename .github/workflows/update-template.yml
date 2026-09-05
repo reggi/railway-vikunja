@@ -1,0 +1,197 @@
+name: Update repository template
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Immutable template release tag to pin
+        required: false
+        type: string
+      set:
+        description: JSON object of Knitto input paths and values
+        required: false
+        default: "{}"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-repository-template
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Apply latest template
+        env:
+          KNITTO_REF: ${{ inputs.ref }}
+          KNITTO_SET: ${{ inputs.set }}
+        run: |
+          SOURCE_TYPE="$(node -p "require('./.knitto.json').source.type")"
+          CURRENT_KNITTO_VERSION="$(node -p "require('./.knitto.json').engine.version")"
+          if [ "$SOURCE_TYPE" = "git" ]; then
+            if [ -z "$KNITTO_REF" ]; then
+              echo "A template release tag is required for Git consumers." >&2
+              exit 1
+            fi
+            npx --yes --package="knitto@$CURRENT_KNITTO_VERSION" -- \
+              knitto source pin "$GITHUB_WORKSPACE" --ref "$KNITTO_REF"
+          fi
+
+          assignments_file="$RUNNER_TEMP/knitto-set"
+          node --input-type=module -e '
+            const values = JSON.parse(process.env.KNITTO_SET || "{}");
+            if (!values || Array.isArray(values) || typeof values !== "object") {
+              throw new Error("The set input must be a JSON object");
+            }
+            for (const [path, value] of Object.entries(values)) {
+              if (
+                value === null ||
+                !["string", "number", "boolean"].includes(typeof value)
+              ) {
+                throw new Error(`The set value for ${path} must be a string, number, or boolean`);
+              }
+              process.stdout.write(`${path}=${String(value)}\0`);
+            }
+          ' > "$assignments_file"
+          mapfile -d '' assignments < "$assignments_file"
+          rm "$assignments_file"
+
+          set_args=()
+          for assignment in "${assignments[@]}"; do
+            set_args+=(--set "$assignment")
+          done
+
+          PINNED_KNITTO_VERSION="$(node -p "require('./.knitto.json').engine.version")"
+          npx --yes --package="knitto@$PINNED_KNITTO_VERSION" -- \
+            knitto apply "$GITHUB_WORKSPACE" \
+            --update \
+            "${set_args[@]}"
+
+          if ! git diff --quiet -- package.json; then
+            npm install --package-lock-only --ignore-scripts
+          fi
+
+          if [ "$GITHUB_REPOSITORY" = "reggi/template-railway" ]; then
+            rm -f .knitto.lock
+          fi
+
+      - name: Run repository quality checks
+        run: npm run test:quality --if-present
+
+      - name: Record Knitto provenance
+        id: provenance
+        run: |
+          if [ ! -f .knitto.lock ]; then
+            exit 0
+          fi
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const config = JSON.parse(fs.readFileSync(".knitto.json", "utf8"));
+            const lock = JSON.parse(fs.readFileSync(".knitto.lock", "utf8"));
+            const url = config.source.url.replace(/\.git$/, "");
+            const repository = url
+              .replace(/^git@github\.com:/, "")
+              .replace(/^https:\/\/github\.com\//, "");
+            const output = process.env.GITHUB_OUTPUT;
+            fs.appendFileSync(output, [
+              `template=${repository}`,
+              `path=${config.source.path || ".knitto"}`,
+              `ref=${config.source.ref || ""}`,
+              `revision=${lock.provenance.revision || ""}`,
+              `digest=${lock.digest}`,
+              ""
+            ].join("\n"));
+          '
+
+      - name: Detect template changes
+        id: changes
+        run: |
+          if git status --short | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update template pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KNITTO_TEMPLATE: ${{ steps.provenance.outputs.template }}
+          KNITTO_PATH: ${{ steps.provenance.outputs.path }}
+          KNITTO_REF: ${{ steps.provenance.outputs.ref }}
+          KNITTO_REVISION: ${{ steps.provenance.outputs.revision }}
+          KNITTO_DIGEST: ${{ steps.provenance.outputs.digest }}
+        run: |
+          if [ -n "$KNITTO_REVISION" ]; then
+            UPDATE_BRANCH="automation/update-knitto-${KNITTO_REVISION:0:12}"
+          else
+            UPDATE_BRANCH="automation/update-repository-template"
+          fi
+          body_file="$RUNNER_TEMP/knitto-pr-body"
+          cat > "$body_file" <<EOF
+          Applies the selected Knitto template release and refreshes generated package state.
+
+          Knitto-Template: $KNITTO_TEMPLATE
+          Knitto-Path: $KNITTO_PATH
+          Knitto-Ref: $KNITTO_REF
+          Knitto-Revision: $KNITTO_REVISION
+          Knitto-Digest: $KNITTO_DIGEST
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$UPDATE_BRANCH" || true
+          git switch --create "$UPDATE_BRANCH"
+          git add --all
+          git commit -m "chore: update repository template"
+          git push --force-with-lease origin "HEAD:$UPDATE_BRANCH"
+
+          existing_pr="$(gh pr list \
+            --base main \
+            --head "$UPDATE_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+          if [ -n "$existing_pr" ]; then
+            gh pr edit "$existing_pr" \
+              --title "chore: update Knitto template" \
+              --body-file "$body_file"
+          else
+            gh pr create \
+              --base main \
+              --head "$UPDATE_BRANCH" \
+              --title "chore: update Knitto template" \
+              --body-file "$body_file"
+          fi
+
+          {
+            echo "## Knitto template update"
+            echo
+            echo "- Template: \`$KNITTO_TEMPLATE\`"
+            echo "- Ref: \`$KNITTO_REF\`"
+            echo "- Revision: \`$KNITTO_REVISION\`"
+            echo "- Digest: \`$KNITTO_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report current state
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "Repository already matches the latest template."
