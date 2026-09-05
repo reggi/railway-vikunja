@@ -47,11 +47,7 @@ jobs:
         run: |
           SOURCE_TYPE="$(node -p "require('./.knitto.json').source.type")"
           CURRENT_KNITTO_VERSION="$(node -p "require('./.knitto.json').engine.version")"
-          if [ "$SOURCE_TYPE" = "git" ]; then
-            if [ -z "$KNITTO_REF" ]; then
-              echo "A template release tag is required for Git consumers." >&2
-              exit 1
-            fi
+          if [ "$SOURCE_TYPE" = "git" ] && [ -n "$KNITTO_REF" ]; then
             npx --yes --package="knitto@$CURRENT_KNITTO_VERSION" -- \
               knitto source pin "$GITHUB_WORKSPACE" --ref "$KNITTO_REF"
           fi
